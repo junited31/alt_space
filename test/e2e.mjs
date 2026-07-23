@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, extname, resolve, relative, isAbsolute } from 'node:path';
+import { dirname, extname, resolve, relative, isAbsolute } from 'node:path';
 import assert from 'node:assert/strict';
 
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -107,9 +107,15 @@ try {
   check('map: 선택 시 근거·영향·결과', /근거/.test(pbody) && /영향/.test(pbody) && /결과/.test(pbody));
   check('map: 분석 링크', await page.getAttribute('#panel a.btn','href') === 'analysis.html?id=s1');
   check('map: 선택 저장(mapChoice)', (await page.evaluate(()=>JSON.parse(localStorage.getItem('tt:mapChoice')||'{}'))).i1 === 's1');
-  // 리로드 후 핀 강조 유지
+  // 여러 이슈 독립 선택: i2에도 시나리오 선택 → i1·i2 둘 다 유지
+  await (await page.$$('#map .pin'))[1].click(); // i2
+  await page.waitForSelector('#panel fieldset input[type=radio]');
+  await page.check('#panel input[type=radio][value=s4]');
+  const mc = await page.evaluate(()=>JSON.parse(localStorage.getItem('tt:mapChoice')||'{}'));
+  check('map: 여러 이슈 독립 선택(i1·i2 유지)', mc.i1==='s1' && mc.i2==='s4', JSON.stringify(mc));
+  // 리로드 후 핀 강조 유지(i1·i2 둘 다)
   await page.reload(); await page.waitForSelector('#map .pin.sel');
-  check('map: 리로드 후 선택 핀 강조', (await page.$$('#map .pin.sel')).length >= 1);
+  check('map: 리로드 후 선택 핀 강조(2개)', (await page.$$('#map .pin.sel')).length === 2, String((await page.$$('#map .pin.sel')).length));
   // 분석 없는 시나리오(s3)도 링크 제공
   await (await page.$$('#map .pin'))[0].click();
   await page.check('#panel input[type=radio][value=s3]');

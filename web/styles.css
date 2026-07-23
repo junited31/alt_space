@@ -19,8 +19,8 @@ main { max-width:1000px; margin:0 auto; padding:24px 20px; }
 .star { cursor:pointer; user-select:none; background:none; border:none; color:inherit; font:inherit; padding:0; }
 /* 키보드 포커스 표시 (접근성) */
 .btn:focus-visible, .star:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
-.tnode:focus-visible circle, .hot:focus-visible circle { stroke:var(--fg); stroke-width:3; }
-.tnode:focus-visible, .hot:focus-visible { outline:none; }
+.tnode:focus-visible circle, .pin:focus-visible circle { stroke:var(--fg); stroke-width:3; }
+.tnode:focus-visible, .pin:focus-visible { outline:none; }
 /* 트리 */
 .treewrap { background:#0b1526; border:1px solid var(--line); border-radius:10px; }
 .tnode circle { transition: opacity .4s, fill .4s; cursor:pointer; }

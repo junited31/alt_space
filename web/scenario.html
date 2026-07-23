@@ -17,7 +17,7 @@ else {
   if (parent) root.append(el('div',{class:'crumb'}, ['분기 출처: ', el('a',{href:`scenario.html?id=${parent.id}`}, parent.title)]));
 
   const h = el('h1',{}, s.title); root.append(h);
-  // star (지지) — realizedAt/reflected와 독립
+  // star (지지) — realizedAt·mapChoice와 독립
   const starEl = el('button',{class:'star', type:'button', 'aria-pressed':String(isStarred(raw)), 'aria-label':'이 시나리오 지지'}, `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`);
   starEl.addEventListener('click',()=>{ toggleStar(raw.id); starEl.setAttribute('aria-pressed', String(isStarred(raw))); starEl.textContent = `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`; });
   root.append(el('div',{style:'margin:4px 0 12px'}, [starEl, s.realizedAt ? el('span',{class:'badge heat-low',style:'margin-left:10px'}, `현실화 ${s.realizedAt}`) : el('span',{class:'badge',style:'margin-left:10px'},'미현실')]));

@@ -11,7 +11,7 @@ const NS = 'tt:';
 const _get = (k) => { try { return JSON.parse(localStorage.getItem(NS + k) || '{}'); } catch { return {}; } };
 const _set = (k, o) => localStorage.setItem(NS + k, JSON.stringify(o));
 
-// star: 유저 지지(오버라이드는 +1 토글). realizedAt/reflected와 독립.
+// star: 유저 지지(오버라이드는 +1 토글). realizedAt·mapChoice와 독립.
 export function toggleStar(id) { const o = _get('stars'); o[id] = !o[id]; _set('stars', o); }
 export function isStarred(s) { return !!_get('stars')[s.id]; }
 export function starCount(s) { return s.stars + (_get('stars')[s.id] ? 1 : 0); }
