@@ -4,37 +4,59 @@ import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, extname, normalize } from 'node:path';
+import { dirname, join, extname, resolve, relative, isAbsolute } from 'node:path';
 import assert from 'node:assert/strict';
 
-const WEB = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
+const WEB = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 
-// web/ 하위만 서빙하는 최소 정적 서버 (경로 탈출 방지).
+// web/ 하위만 서빙하는 최소 정적 서버.
+// relative() 기반 봉쇄로 형제 디렉터리(web-private 등) 우회까지 차단. 루프백에만 바인딩.
 const server = createServer(async (req, res) => {
+  const rel = decodeURIComponent(req.url.split('?')[0]);
+  const p = resolve(WEB, '.' + rel);
+  const within = relative(WEB, p);
+  if (within.startsWith('..') || isAbsolute(within)) { res.writeHead(403); return res.end('forbidden'); }
   try {
-    const rel = decodeURIComponent(req.url.split('?')[0]);
-    const p = normalize(join(WEB, rel));
-    if (!p.startsWith(WEB)) { res.writeHead(403); return res.end('forbidden'); }
     const body = await readFile(p);
     res.writeHead(200, { 'content-type': TYPES[extname(p)] || 'application/octet-stream' });
     res.end(body);
-  } catch { res.writeHead(404); res.end('not found'); }
+  } catch (e) {
+    if (e.code === 'ENOENT') { res.writeHead(404); res.end('not found'); }
+    else { res.writeHead(500); res.end('server error'); }  // 진짜 버그를 404로 숨기지 않음
+  }
 });
-await new Promise(r => server.listen(0, r));
-const BASE = `http://localhost:${server.address().port}`;
-
-const b = await chromium.launch();
-const ctx = await b.newContext();
-const page = await ctx.newPage();
-const errors = [];
-page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const BASE = `http://127.0.0.1:${server.address().port}`;
 
 const results = [];
 const check = (name, cond, extra = '') => { assert.ok(cond, `${name} FAILED ${extra}`); results.push(`✓ ${name}`); };
+const errors = [];
+const CURSOR = '.crumb[aria-live=polite]';
 
+let b;
 try {
+  b = await chromium.launch();
+  const ctx = await b.newContext();
+  // setInterval 계측: 페이지마다 활성/최대 동시 인터벌 수를 노출해 타이머 겹침·누수를 실측한다.
+  // (앱은 issue.html 스윕에서만 setInterval 사용) — addInitScript는 매 내비게이션 전에 주입되어 카운터가 리셋된다.
+  await ctx.addInitScript(() => {
+    const rawSet = window.setInterval.bind(window);
+    const rawClear = window.clearInterval.bind(window);
+    const live = new Set();
+    window.__active = 0; window.__maxActive = 0;
+    window.setInterval = (...a) => { const id = rawSet(...a); live.add(id); window.__active = live.size; window.__maxActive = Math.max(window.__maxActive, live.size); return id; };
+    window.clearInterval = (id) => { live.delete(id); window.__active = live.size; return rawClear(id); };
+  });
+  const page = await ctx.newPage();
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+
+  // 타임라인 스윕 종료 대기: 모든 인터벌이 정리되고(active 0) 커서가 now(2026-07-23)에 도달.
+  const waitSweepDone = () => page.waitForFunction(
+    sel => window.__active === 0 && document.querySelector(sel)?.textContent === '2026-07-23',
+    CURSOR, { timeout: 10000 });
+
   // 1. Dashboard: 4 issue cards, i4 shows 시나리오 0개
   await page.goto(`${BASE}/index.html`);
   await page.waitForSelector('#list a.card');
@@ -46,8 +68,7 @@ try {
 
   // 2. Issue timeline tree i1: after animation ends, nodes render; s7/s10 hidden, s1/s2 present
   await page.goto(`${BASE}/issue.html?id=i1`);
-  await page.waitForSelector('.treewrap svg .tnode');
-  await page.waitForTimeout(2200); // let sweep animation finish (~12*130ms)
+  await waitSweepDone();
   const nodeTexts = await page.$$eval('.treewrap svg .tnode text', els => els.map(e => e.textContent));
   const titles = nodeTexts.join(' | ');
   check('tree: s1 규제 전면 확대 shown', /규제 전면 확대/.test(titles));
@@ -110,10 +131,9 @@ try {
   check('analysis s3: 분석 데이터 없음', /분석 데이터 없음/.test(await page.textContent('body')));
 
   // === Accessibility ===
-  // A1. issue.html slider label + SVG nodes keyboard
+  // A1. issue.html slider label + SVG nodes keyboard (스윕 완료 후 안정된 렌더에서 노드 캡처)
   await page.goto(`${BASE}/issue.html?id=i1`);
-  await page.waitForSelector('.treewrap svg .tnode');
-  await page.waitForTimeout(2200);
+  await waitSweepDone();
   check('a11y: slider aria-label', await page.getAttribute('#timeline-cursor', 'aria-label') !== null);
   check('a11y: slider has <label for>', await page.getAttribute('label[for=timeline-cursor]', 'for') === 'timeline-cursor');
   const node0 = await page.$('.treewrap svg .tnode');
@@ -161,24 +181,26 @@ try {
   const btnBg = await page.$eval('.btn', el => getComputedStyle(el).backgroundColor);
   check('a11y: .btn uses darker --btn (#2f6fd0 = rgb(47,111,208))', btnBg === 'rgb(47, 111, 208)', btnBg);
 
-  // === Should-fix 회귀 ===
-  // S1. replay 타이머: 재생 도중 여러 번 눌러도 커서가 단조 진행(겹침 없이 최종 maxD 도달)
+  // === Should-fix 회귀 (타이머 계측으로 실검증) ===
+  // S1. replay 타이머: 재생 연타해도 동시 실행 인터벌이 1개를 넘지 않음(겹침 없음) + 최종 now 도달
   await page.goto(`${BASE}/issue.html?id=i1`);
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.waitForSelector('#timeline-cursor');
+  await waitSweepDone();                               // 초기 스윕 종료 대기
+  await page.evaluate(() => { window.__maxActive = 0; }); // 이후 replay 구간만 측정
   await page.click('button.btn.ghost'); // ▶ 다시 재생
   await page.click('button.btn.ghost');
   await page.click('button.btn.ghost');
-  await page.waitForTimeout(2200);
-  const finalCursor = await page.$eval('.crumb[aria-live=polite]', e => e.textContent);
-  check('should-fix: replay 연타 후 커서 최종 now 도달(타이머 겹침 없음)', finalCursor === '2026-07-23', finalCursor);
+  const maxDuringReplay = await page.evaluate(() => window.__maxActive);
+  check('should-fix: replay 연타 시 동시 인터벌 ≤1 (타이머 겹침 없음)', maxDuringReplay === 1, `max=${maxDuringReplay}`);
+  await waitSweepDone();
+  const finalCursor = await page.$eval(CURSOR, e => e.textContent);
+  check('should-fix: replay 후 커서 최종 now 도달', finalCursor === '2026-07-23', finalCursor);
+  // 수동 스크럽이 애니를 멈춤: 재생 직후 슬라이더 조작 → 활성 인터벌 0
   await page.click('button.btn.ghost');
   await page.$eval('#timeline-cursor', (s) => { s.value = s.min; s.dispatchEvent(new Event('input')); });
-  const scrubbed = await page.$eval('.crumb[aria-live=polite]', e => e.textContent);
-  await page.waitForTimeout(800);
-  const afterWait = await page.$eval('.crumb[aria-live=polite]', e => e.textContent);
-  check('should-fix: 수동 스크럽이 애니를 멈춤(커서 자동 이동 안 함)', scrubbed === afterWait, `${scrubbed} -> ${afterWait}`);
+  const activeAfterScrub = await page.evaluate(() => window.__active);
+  check('should-fix: 수동 스크럽이 애니 정지(활성 인터벌 0)', activeAfterScrub === 0, `active=${activeAfterScrub}`);
 
   // S2. localStorage 네임스페이스: 저장 키가 tt: 프리픽스
   await page.goto(`${BASE}/scenario.html?id=s2`);
@@ -204,8 +226,8 @@ try {
   check('should-fix: 좁은 화면 lens-grid 1열', cols === 1, `columns=${cols}`);
   await page.setViewportSize({ width: 1000, height: 900 });
 } finally {
-  await b.close();
-  server.close();
+  if (b) await b.close();
+  await new Promise(res => server.close(res));  // 서버 종료를 확실히 await
 }
 
 console.log(results.join('\n'));
