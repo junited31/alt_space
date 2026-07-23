@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 빌드 스텝 없음. 브라우저에서 파일 직접 열거나 `python3 -m http.server`로 서빙.
+- 빌드 스텝 없음. `python3 -m http.server`로 서빙해서 열기 (ES module이라 `file://` 직접 열기는 CORS로 막힘).
 - 프레임워크·번들러·CSS 프레임워크·그래프 시각화 라이브러리 **금지**.
 - 모든 데이터·분석은 목. 실제 수집·LLM·인증·영속 저장 없음.
 - 화면당 정적 HTML 파일 증식 금지 — 레코드 화면은 `?id=` 파라미터 + 단일 템플릿.
@@ -30,12 +30,12 @@
 - Create: `test/check-data.mjs`
 
 **Interfaces:**
-- Produces (`web/data.js`, 전역 `window.DB` 및 ES export `DB`):
+- Produces (`web/data.js`, 전역 `window.DB` **만** — 이 파일은 클래식 `<script src>`로 로드되므로 `export` 문 절대 금지. ES `export`는 `app.js`에서만):
   - `DB.issues`: `[{ id, title, summary, sources:[], traffic, heat }]`
   - `DB.scenarios`: `[{ id, issueId, parentScenarioId|null, title, body, rationale, votes:{up,down}, adopted:bool, mapLocation:{x,y,label}|null }]`
   - `DB.comments`: `[{ id, scenarioId, author, body, ts }]`
   - `DB.analyses`: `[{ scenarioId, lenses:{ political, economic, military, civilian } }]`
-- Produces (`web/app.js`, ES exports): `qs(name)` — URL 쿼리 파라미터 읽기; `el(tag, props, children)` — DOM 헬퍼; `mountNav(active)` — 상단 nav 삽입; `byId(coll, id)`; `childrenOf(scenarioId)`; `scenariosOfIssue(issueId)`.
+- Produces (`web/app.js`, ES exports): `qs(name)` — URL 쿼리 파라미터 읽기; `el(tag, props, children)` — DOM 헬퍼; `mountNav(active)` — 상단 nav 삽입; `byId(coll, id)`; `childrenOf(scenarioId)`; `scenariosOfIssue(issueId)`; `setAdopted(id, val)` / `isAdopted(scenario)` — 채택 상태를 localStorage에 오버라이드 저장·병합(목 데이터엔 영속 저장이 없으므로 화면 간 유지 수단).
 
 - [ ] **Step 1: 무결성 체크 테스트 작성 (실패하도록)**
 
@@ -138,6 +138,17 @@ export const qs = (name) => new URLSearchParams(location.search).get(name);
 export const byId = (coll, id) => coll.find(x => x.id === id);
 export const scenariosOfIssue = (issueId) => DB.scenarios.filter(s => s.issueId === issueId);
 export const childrenOf = (scenarioId) => DB.scenarios.filter(s => s.parentScenarioId === scenarioId);
+
+// 채택 상태는 목 데이터라 영속 저장이 없음. localStorage 오버라이드로 화면 간 유지.
+// ponytail: localStorage 오버라이드면 충분, 상태관리 라이브러리 불필요.
+export function setAdopted(id, val) {
+  const o = JSON.parse(localStorage.getItem('adopt') || '{}');
+  o[id] = val; localStorage.setItem('adopt', JSON.stringify(o));
+}
+export function isAdopted(s) {
+  const o = JSON.parse(localStorage.getItem('adopt') || '{}');
+  return s.id in o ? o[s.id] : s.adopted;
+}
 
 export function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -380,7 +391,7 @@ git commit -m "feat: 시나리오 제출 폼 (목 제출)"
 <body><main id="root"></main>
 <script src="data.js"></script>
 <script type="module">
-import { DB, qs, byId, childrenOf, el, mountNav } from './app.js';
+import { DB, qs, byId, childrenOf, el, mountNav, setAdopted, isAdopted } from './app.js';
 mountNav('dashboard');
 const root = document.getElementById('root');
 const s = byId(DB.scenarios, qs('id'));
@@ -391,10 +402,20 @@ else {
   root.append(el('div',{class:'crumb'}, `대시보드 › ${issue.title}`));
   if (parent) root.append(el('div',{class:'crumb'}, [ '분기 출처: ', el('a',{href:`scenario.html?id=${parent.id}`}, parent.title) ]));
   root.append(el('h1',{}, s.title));
-  let adopted = s.adopted;
+  let adopted = isAdopted(s);
   const status = el('span',{class:'badge heat-low'}, adopted ? '채택됨' : '검토중');
-  root.append(el('div',{}, [ status, ' ',
-    el('button',{class:'btn ghost',onclick:(e)=>{ adopted=!adopted; status.textContent = adopted?'채택됨':'검토중'; e.target.textContent = adopted?'채택 취소':'채택으로 표시'; }}, adopted?'채택 취소':'채택으로 표시') ]));
+  // 지도 좌표(mapLocation)가 없으면 채택해도 지도에 못 찍으므로 토글 막고 안내.
+  if (!s.mapLocation) {
+    root.append(el('div',{}, [ status, ' ', el('span',{class:'crumb'},'지도 좌표 없음 — 채택 불가(목)') ]));
+  } else {
+    const btn = el('button',{class:'btn ghost'}, adopted?'채택 취소':'채택으로 표시');
+    btn.addEventListener('click', () => {
+      adopted = !adopted; setAdopted(s.id, adopted);   // localStorage에 저장 → 지도에서 병합
+      status.textContent = adopted?'채택됨':'검토중';
+      btn.textContent = adopted?'채택 취소':'채택으로 표시';
+    });
+    root.append(el('div',{}, [ status, ' ', btn ]));
+  }
   root.append(el('p',{}, s.body));
   root.append(el('div',{class:'card'}, [ el('strong',{},'정리된 근거'), el('p',{style:'margin:6px 0 0'}, s.rationale) ]));
   // 투표
@@ -418,7 +439,7 @@ else {
 
 - [ ] **Step 2: 브라우저 검증**
 
-`scenario.html?id=s2` — "분기 출처: 규제 전면 확대" breadcrumb, 근거 박스, 투표 버튼 증가, 채택 토글. `scenario.html?id=s1` — 하위 분기 s2·s3 목록. `scenario.html?id=s5` — 코멘트 빈 상태.
+`scenario.html?id=s2` — "분기 출처: 규제 전면 확대" breadcrumb, 근거 박스, 투표 버튼 증가, 채택 토글. `scenario.html?id=s1` — 하위 분기 s2·s3 목록. `scenario.html?id=s5` — 코멘트 빈 상태 + s5는 `mapLocation`이 null이라 "채택 불가(목)" 안내. **채택 지속 검증:** s4를 "채택 취소" → `map.html`에서 s4 핫스팟 사라짐 → 다시 채택하면 재등장(localStorage 병합 확인).
 
 - [ ] **Step 3: 커밋**
 
@@ -457,11 +478,12 @@ git commit -m "feat: 시나리오 토론 — breadcrumb, 투표, 채택 토글, 
 </main>
 <script src="data.js"></script>
 <script type="module">
-import { DB, el, mountNav } from './app.js';
+import { DB, el, mountNav, isAdopted } from './app.js';
 mountNav('map');
 const svg = document.getElementById('map');
 const panel = document.getElementById('panel');
-const spots = DB.scenarios.filter(s => s.adopted && s.mapLocation);
+// isAdopted = 목 데이터 채택 + localStorage 오버라이드 병합 → 토론에서 채택한 게 여기 뜸.
+const spots = DB.scenarios.filter(s => isAdopted(s) && s.mapLocation);
 if (!spots.length) panel.append(el('p',{class:'empty'},'아직 채택된 시나리오 없음. 토론에서 시나리오를 채택하면 지도에 표시됩니다.'));
 const SVGNS='http://www.w3.org/2000/svg';
 function select(s){
@@ -487,7 +509,7 @@ spots.forEach(s => {
 
 - [ ] **Step 2: 브라우저 검증**
 
-`map.html` — 채택 시나리오(s1,s2,s4) 핫스팟 표시, 클릭 시 패널에 상세 + "AI 분석 실행" 버튼 → `analysis.html?id=` 이동. (임시로 data.js에서 채택 전부 false로 바꿔 빈 상태도 1회 확인 후 되돌리기.)
+`map.html` — 채택 시나리오(s1,s2,s4) 핫스팟 표시, 클릭 시 패널에 상세 + "AI 분석 실행" 버튼 → `analysis.html?id=` 이동. 빈 상태는 브라우저 콘솔에서 `localStorage.setItem('adopt', JSON.stringify({s1:false,s2:false,s4:false}))` 후 새로고침으로 확인, `localStorage.removeItem('adopt')`로 복구(data.js 편집 불필요).
 
 - [ ] **Step 3: 커밋**
 
@@ -556,7 +578,7 @@ git commit -m "feat: AI 분석 4관점 뷰 + 로딩 연출"
 
 ## Self-Review 결과
 
-- **스펙 커버리지:** 6화면 + 공용 셸 = Task 2~7 + Task 1(셸/데이터). 빈 상태(이슈 시나리오0=i4, 지도 채택0 검증), 분기 트리, 채택 트리거, 화면 전환 진입점 모두 태스크에 존재.
+- **스펙 커버리지:** 6화면 + 공용 셸 = Task 2~7 + Task 1(셸/데이터). 빈 상태(이슈 시나리오0=i4, 지도 채택0 검증), 분기 트리, 화면 전환 진입점 모두 태스크에 존재. **채택 트리거는 localStorage 오버라이드(`setAdopted`/`isAdopted`)로 토론→지도 실제 반영됨** (fable-reviewer 지적 반영, 초안의 로컬 변수 토글은 리로드 시 소실되어 지도에 반영 안 됐음).
 - **플레이스홀더:** 없음 — 모든 화면 실제 코드 포함.
 - **타입 정합:** `mapLocation{x,y,label}`, `votes{up,down}`, `lenses{political,economic,military,civilian}` — data.js·check-data·화면 전반 일치. 헬퍼명(`scenariosOfIssue`,`childrenOf`,`byId`,`qs`,`el`,`mountNav`) 정의(Task1)와 사용(Task2~7) 일치.
 - **범위:** 목업 단일 계획으로 적정. out-of-scope(인증·대댓글·GIS·라이브러리) 제외 유지.
