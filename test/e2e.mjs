@@ -47,6 +47,16 @@ try {
   const spinePts = await page.$$eval('.treewrap svg .tnode:not(.tip) circle', els => els.filter(e=>e.getAttribute('fill')==='var(--realized)').length);
   check('dash: 첫 방문 현실화 점 점등(정적)', spinePts >= 3, `got ${spinePts}`);
   check('dash: 첫 방문 후 스윕 타이머 없음', await page.evaluate(()=>window.__active) === 0);
+  // 스파인이 now(이슈 팬아웃 지점 x=640, y=90)까지 연결 — 통합 트리 연결성
+  const reachesNow = await page.$$eval('.treewrap svg line', (ls, xn) => ls.some(l => Math.round(+l.getAttribute('x2'))===xn && +l.getAttribute('y1')===90 && +l.getAttribute('y2')===90), 640);
+  check('dash: 스파인이 now까지 연결', reachesNow);
+
+  // 재방문(저장된 과거 lastVisit) → 스윕 애니 실제 구동(정적 아님)
+  await page.evaluate(() => localStorage.setItem('tt:lastVisit', '2026-02-01'));
+  await page.reload();
+  await page.waitForSelector('.treewrap svg .tnode');
+  check('dash: 재방문 스윕 타이머 구동', await page.evaluate(()=>window.__active) >= 1);
+  await page.waitForFunction(() => window.__active === 0 && document.querySelector('.crumb[aria-live=polite]')?.textContent === '2026-07-23');
 
   // 이슈 팁 선택 → 서브트리 + 목록 + 제출
   const i1tip = (await page.$$('.treewrap svg .tnode.tip'))[0];
@@ -55,6 +65,7 @@ try {
   const subTitles = (await page.$$eval('#sub .treewrap svg .tnode text', els=>els.map(e=>e.textContent))).join(' | ');
   check('dash: i1 서브트리 s1·s2 표시', /규제 전면 확대/.test(subTitles) && /역내 자급 가속/.test(subTitles));
   check('dash: i1 서브트리 s7·s10 가지치기', !/보조금 축소 역풍/.test(subTitles) && !/글로벌 통제망/.test(subTitles), subTitles);
+  check('dash: i1 서브트리 유지 후보 s3·s6·s8·s9 표시', ['우회 무역 확산','팹 국산화 완성','수출 반등','제3국 제재 확대'].every(t=>subTitles.includes(t)), subTitles);
   check('dash: 시나리오 목록 존재', (await page.$$eval('#sub h3', els=>els.some(e=>/시나리오 목록/.test(e.textContent)))));
   check('dash: 제출 링크', await page.getAttribute('#sub a.btn', 'href') === 'submit.html?issue=i1');
   check('dash: 팁 aria-expanded=true', await (await page.$$('.treewrap svg .tnode.tip'))[0].getAttribute('aria-expanded') === 'true');

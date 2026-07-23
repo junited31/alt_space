@@ -8,7 +8,7 @@ export const dnum = (d) => Date.parse(d);
 
 // localStorage 키 네임스페이스(다른 앱과 충돌 방지) + 손상된 값 방어.
 const NS = 'tt:';
-const _get = (k) => { try { return JSON.parse(localStorage.getItem(NS + k) || '{}'); } catch { return {}; } };
+const _get = (k) => { try { const v = JSON.parse(localStorage.getItem(NS + k) || '{}'); return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; } catch { return {}; } };
 const _set = (k, o) => localStorage.setItem(NS + k, JSON.stringify(o));
 
 // star: 유저 지지(오버라이드는 +1 토글). realizedAt·mapChoice와 독립.

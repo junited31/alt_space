@@ -52,6 +52,12 @@ function renderOverview(cur) {
     line.setAttribute('class','tedge');line.setAttribute('stroke','var(--realized)');line.setAttribute('stroke-width','3');
     ovSvg.append(line);
   }
+  if (lit.length) {  // 마지막 채택 지점 → now(이슈 팬아웃 지점)까지 줄기 연장 — 스파인·이슈 팁 연결
+    const last = lit[lit.length-1], line = document.createElementNS(SVGNS,'line');
+    line.setAttribute('x1',xOfR(last));line.setAttribute('y1',spineY);line.setAttribute('x2',xNow);line.setAttribute('y2',spineY);
+    line.setAttribute('class','tedge');line.setAttribute('stroke','var(--realized)');line.setAttribute('stroke-width','3');
+    ovSvg.append(line);
+  }
   for (const s of realized) {
     const on = dnum(s.realizedAt) <= cur;
     const g=document.createElementNS(SVGNS,'g'); g.setAttribute('class','tnode'+(on?'':' dim'));
@@ -86,6 +92,7 @@ function renderOverview(cur) {
 function selectIssue(id){
   selectedIssue = id;
   renderOverview(Number(slider.value));
+  ovSvg.querySelector('.tnode.tip.sel')?.focus();  // 재렌더로 사라진 포커스를 선택된 팁에 복원
   renderSub(id);
 }
 

@@ -27,8 +27,9 @@ function renderPins(){
   svg.querySelectorAll('.pin').forEach(n => n.remove());
   DB.issues.forEach(iss => {
     const { x, y } = iss.mapLocation;
-    const on = selected === iss.id || !!getMapChoice(iss.id);
+    const on = !!getMapChoice(iss.id);  // 강조 = 실제 선택된 시나리오가 있는 이슈만(단순히 열어본 핀은 제외)
     const g = document.createElementNS(SVGNS,'g'); g.setAttribute('class','pin'+(on?' sel':''));
+    g.setAttribute('data-issue', iss.id);
     g.setAttribute('tabindex','0'); g.setAttribute('role','button'); g.setAttribute('aria-label',`${iss.title} 상세 보기`);
     const c = document.createElementNS(SVGNS,'circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r','8');
     const t = document.createElementNS(SVGNS,'text'); t.setAttribute('x',x+12); t.setAttribute('y',y+4); t.setAttribute('fill','#e6ecf5'); t.setAttribute('font-size','12'); t.textContent = iss.title;
@@ -38,6 +39,7 @@ function renderPins(){
 
 function select(id){
   selected = id; renderPins();
+  svg.querySelector(`.pin[data-issue="${id}"]`)?.focus();  // 재렌더로 사라진 포커스를 클릭한 핀에 복원
   const iss = byId(DB.issues, id);
   panel.textContent='';
   const card = el('div',{class:'card'}, [ el('h3',{}, iss.title), el('div',{class:'crumb'}, iss.mapLocation.label) ]);
