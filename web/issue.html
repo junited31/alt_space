@@ -102,7 +102,7 @@ else {
       }
     }
 
-    render(maxD);
+    render(dnum(lastVisit() || '2026-04-01'));  // 첫 페인트를 애니 시작점에 맞춤 (완성 트리 플래시 방지)
     slider.addEventListener('input', () => render(Number(slider.value)));
 
     function animate() {
