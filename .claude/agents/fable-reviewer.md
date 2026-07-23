@@ -1,5 +1,5 @@
 ---
-name: design-reviewer
+name: fable-reviewer
 description: High-effort design and spec reviewer. Use to critique design drafts, specs, and architecture decisions before implementation. Returns a prioritized must-fix / nice-to-have / out-of-scope list.
 model: fable
 effort: high
