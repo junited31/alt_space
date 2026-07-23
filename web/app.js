@@ -16,9 +16,9 @@ export function toggleStar(id) { const o = _get('stars'); o[id] = !o[id]; _set('
 export function isStarred(s) { return !!_get('stars')[s.id]; }
 export function starCount(s) { return s.stars + (_get('stars')[s.id] ? 1 : 0); }
 
-// reflected: 지도 표시. 토론 화면 토글.
-export function setReflected(id, v) { const o = _get('reflected'); o[id] = v; _set('reflected', o); }
-export function isReflected(s) { const o = _get('reflected'); return s.id in o ? o[s.id] : s.reflected; }
+// mapChoice: 지도에서 이슈별 선택한 시나리오. 저장값이 그 이슈 시나리오에 없으면 무시.
+export function getMapChoice(issueId) { const id = _get('mapChoice')[issueId]; return (id && scenariosOfIssue(issueId).some(s => s.id === id)) ? id : null; }
+export function setMapChoice(issueId, scenarioId) { const o = _get('mapChoice'); o[issueId] = scenarioId; _set('mapChoice', o); }
 
 // edit: 제목/본문 목 편집 → 지도·분석에 반영.
 export function setEdit(id, patch) { const o = _get('edits'); o[id] = { ...(o[id] || {}), ...patch }; _set('edits', o); }
