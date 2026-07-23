@@ -28,7 +28,7 @@
 - `web/app.js` — 헬퍼 추가/정리.
 - `web/scenario.html` — "지도 반영" 토글 제거(나머지 유지).
 - `web/submit.html` — 제출 후 리다이렉트를 `index.html?issue=<id>`로 변경(구 `issue.html` 경로 제거).
-- `web/styles.css` — 신규 상태 스타일 추가(선택된 이슈 팁, 스파인 점, 확장 서브트리, 선택된 지도 핀, 지도 시나리오 선택 목록).
+- `web/styles.css` — 대시보드 트리 신규 상태 스타일 추가(선택된 이슈 팁 등). 지도 핀·시나리오 선택 목록 스타일은 v1 관례대로 `map.html` 인라인(`<style>`·인라인 속성)으로 둔다.
 - `test/check-data.mjs`, `test/e2e.mjs` — 신동작 검증으로 갱신.
 
 **삭제**
