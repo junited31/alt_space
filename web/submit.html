@@ -23,7 +23,7 @@ else {
     el('button',{class:'btn', type:'button', onclick:() => {
       if (!title.value.trim()) { alert('제목을 입력하세요'); return; }
       alert('(목) 제출됨 — 영속 저장이 없어 트리에 실제 추가되진 않습니다. 이슈로 돌아갑니다.');
-      location.href = `issue.html?id=${issue.id}`;
+      location.href = `index.html?issue=${issue.id}`;
     }},'제출')
   ]);
   form.querySelectorAll('label').forEach(l => l.style.display='block');
