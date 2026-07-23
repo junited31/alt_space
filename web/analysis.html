@@ -1,0 +1,29 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 분석 · 싱크탱크</title><link rel="stylesheet" href="styles.css"></head>
+<body><main id="root"></main>
+<script src="data.js"></script>
+<script type="module">
+import { DB, qs, byId, el, mountNav, applyEdit } from './app.js';
+mountNav('map');
+const root = document.getElementById('root');
+const raw = byId(DB.scenarios, qs('id'));
+if (!raw) { root.append(el('p',{class:'empty'},'시나리오 없음')); }
+else {
+  const s = applyEdit(raw);
+  root.append(el('div',{class:'crumb'}, [ el('a',{href:'map.html'},'지도'), ' › AI 분석' ]));
+  root.append(el('h1',{}, `AI 분석: ${s.title}`));
+  root.append(el('p',{class:'crumb'}, s.body));
+  const loading = el('p',{class:'empty'},'AI 분석 중…'); root.append(loading);
+  const a = DB.analyses.find(x => x.scenarioId === raw.id);
+  setTimeout(() => {
+    loading.remove();
+    if (!a) { root.append(el('p',{class:'empty'},'(목) 이 시나리오의 분석 데이터 없음')); return; }
+    const labels = { political:'정치', economic:'경제', military:'군사', civilian:'민간' };
+    const grid = el('div',{class:'lens-grid'});
+    for (const key of ['political','economic','military','civilian'])
+      grid.append(el('div',{class:'card'}, [ el('h3',{},labels[key]), el('p',{style:'margin:6px 0 0'}, a.lenses[key]) ]));
+    root.append(grid);
+  }, 700);
+}
+</script></body></html>
