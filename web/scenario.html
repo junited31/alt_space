@@ -41,7 +41,11 @@ else {
     el('strong',{},'시나리오 편집(목)'),
     el('label',{for:'edit-title', style:'display:block'},'제목'), eTitle,
     el('label',{for:'edit-body', style:'display:block'},'설명'), eBody,
-    el('button',{class:'btn', type:'button', onclick:()=>{ setEdit(raw.id,{title:eTitle.value,body:eBody.value}); h.textContent=eTitle.value; body.textContent=eBody.value; toggleEdit(false); }},'저장'));
+    el('button',{class:'btn', type:'button', onclick:()=>{
+      const nt = eTitle.value.trim(), nb = eBody.value.trim();
+      if (!nt || !nb) { alert('제목과 설명을 모두 입력하세요'); return; }
+      setEdit(raw.id,{title:nt,body:nb}); h.textContent=nt; body.textContent=nb; toggleEdit(false);
+    }},'저장'));
   const editBtn = el('button',{class:'btn ghost', 'aria-expanded':'false', 'aria-controls':'edit-form', onclick:()=>toggleEdit()},'✎ 편집');
   function toggleEdit(open) {
     const show = open ?? editWrap.style.display==='none';

@@ -4,7 +4,7 @@
 <body><main id="root"></main>
 <script src="data.js"></script>
 <script type="module">
-import { DB, NOW, qs, byId, scenariosOfIssue, dnum, starCount, lastVisit, markVisit, el, mountNav, activate } from './app.js';
+import { DB, NOW, qs, byId, scenariosOfIssue, dnum, starCount, lastVisit, markVisit, setVisit, el, mountNav, activate } from './app.js';
 mountNav('dashboard');
 const root = document.getElementById('root');
 const issue = byId(DB.issues, qs('id'));
@@ -34,7 +34,7 @@ else {
     const slider = el('input',{type:'range', min:String(minD), max:String(maxD), value:String(maxD), step:String(24*3600*1000), style:'flex:1', 'aria-label':'타임라인 시점 커서'});
     const cursorLabel = el('span',{class:'crumb', 'aria-live':'polite'});
     const replay = el('button',{class:'btn ghost'},'▶ 다시 재생');
-    root.append(el('div',{style:'display:flex;align-items:center;gap:12px;margin:16px 0 4px'}, [el('label',{for:'timeline-cursor'},'시점'), slider, replay, cursorLabel]));
+    root.append(el('div',{style:'display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0 4px'}, [el('label',{for:'timeline-cursor'},'시점'), slider, replay, cursorLabel]));
     slider.id = 'timeline-cursor';
 
     const wrap = el('div',{class:'treewrap'});
@@ -106,20 +106,24 @@ else {
     }
 
     render(dnum(lastVisit() || '2026-04-01'));  // 첫 페인트를 애니 시작점에 맞춤 (완성 트리 플래시 방지)
-    slider.addEventListener('input', () => render(Number(slider.value)));
+    // 수동 스크럽은 진행 중 애니를 멈추고 넘겨받음
+    slider.addEventListener('input', () => { stopAnim(); render(Number(slider.value)); });
 
+    let timer = null;
+    const stopAnim = () => { if (timer) { clearInterval(timer); timer = null; } };
     function animate() {
+      stopAnim();  // 중복 재생/스크럽으로 인한 타이머 겹침 방지
       const prev = lastVisit() || '2026-04-01';
       const p = dnum(prev);
       if (p >= maxD) { render(maxD); slider.value = String(maxD); markVisit(); return; }
       const steps = 12, dt = (maxD - p) / steps; let i = 0;
-      const timer = setInterval(() => {
+      timer = setInterval(() => {
         i++; const cur = i >= steps ? maxD : p + dt*i;
         slider.value = String(Math.round(cur)); render(cur);
-        if (i >= steps) { clearInterval(timer); markVisit(); }
+        if (i >= steps) { stopAnim(); markVisit(); }
       }, 130);
     }
-    replay.addEventListener('click', () => { localStorage.setItem('lastVisit','2026-04-01'); animate(); });
+    replay.addEventListener('click', () => { setVisit('2026-04-01'); animate(); });
     animate();
   }
 }

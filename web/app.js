@@ -6,8 +6,10 @@ export const scenariosOfIssue = (issueId) => DB.scenarios.filter(s => s.issueId 
 export const childrenOf = (id) => DB.scenarios.filter(s => s.parentScenarioId === id);
 export const dnum = (d) => Date.parse(d);
 
-const _get = (k) => JSON.parse(localStorage.getItem(k) || '{}');
-const _set = (k, o) => localStorage.setItem(k, JSON.stringify(o));
+// localStorage 키 네임스페이스(다른 앱과 충돌 방지) + 손상된 값 방어.
+const NS = 'tt:';
+const _get = (k) => { try { return JSON.parse(localStorage.getItem(NS + k) || '{}'); } catch { return {}; } };
+const _set = (k, o) => localStorage.setItem(NS + k, JSON.stringify(o));
 
 // star: 유저 지지(오버라이드는 +1 토글). realizedAt/reflected와 독립.
 export function toggleStar(id) { const o = _get('stars'); o[id] = !o[id]; _set('stars', o); }
@@ -23,8 +25,9 @@ export function setEdit(id, patch) { const o = _get('edits'); o[id] = { ...(o[id
 export function applyEdit(s) { const e = _get('edits')[s.id]; return e ? { ...s, ...e } : s; }
 
 // lastVisit: 트리 애니메이션 시작점. 첫 방문이면 목 과거 시점으로 시연.
-export function lastVisit() { return localStorage.getItem('lastVisit'); }
-export function markVisit() { localStorage.setItem('lastVisit', NOW); }
+export function lastVisit() { return localStorage.getItem(NS + 'lastVisit'); }
+export function markVisit() { localStorage.setItem(NS + 'lastVisit', NOW); }
+export function setVisit(v) { localStorage.setItem(NS + 'lastVisit', v); }  // 재생용: 과거 시점으로 되감기
 
 // moderation: 금지어 마스킹(클라이언트 목).
 export function moderate(text) { let t = text; for (const w of DB.badwords) t = t.split(w).join('*'.repeat(w.length)); return t; }

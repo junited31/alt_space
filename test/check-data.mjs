@@ -14,12 +14,24 @@ assert.ok(DB.issues.length >= 4, '이슈 4개 이상');
 
 const issueIds = new Set(DB.issues.map(i => i.id));
 const scenIds = new Set(DB.scenarios.map(s => s.id));
+// id 유일성 (중복 시 렌더/조회가 조용히 어긋남)
+assert.equal(issueIds.size, DB.issues.length, '이슈 id 유일');
+assert.equal(scenIds.size, DB.scenarios.length, '시나리오 id 유일');
+assert.equal(new Set(DB.comments.map(c => c.id)).size, DB.comments.length, '코멘트 id 유일');
 const parentOf = id => DB.scenarios.find(s => s.id === id)?.parentScenarioId;
-const chainLen = s => { let n = 1, p = s.parentScenarioId; while (p) { n++; p = parentOf(p); } return n; };
+// 순환 참조가 있으면 무한 루프 → visited로 방어하며 순환을 결함으로 단언
+const chainLen = s => {
+  const seen = new Set([s.id]);
+  let n = 1, p = s.parentScenarioId;
+  while (p) { assert.ok(!seen.has(p), `순환 참조 체인: ${p}`); seen.add(p); n++; p = parentOf(p); }
+  return n;
+};
 
 for (const s of DB.scenarios) {
   assert.ok(issueIds.has(s.issueId), `${s.id} issueId 유효`);
+  assert.ok(s.parentScenarioId !== s.id, `${s.id} 자기 자신을 부모로 가질 수 없음`);
   if (s.parentScenarioId !== null) assert.ok(scenIds.has(s.parentScenarioId), `${s.id} 부모 유효`);
+  chainLen(s);  // 부모 체인 순환 검증 (순환이면 chainLen 내부 단언이 실패)
   assert.equal(typeof s.stars, 'number', `${s.id} stars 숫자`);
   assert.equal(typeof s.treeLane, 'number', `${s.id} treeLane 숫자`);
   if (s.realizedAt) {
