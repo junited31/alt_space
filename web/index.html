@@ -1,21 +1,179 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>이슈 대시보드 · 싱크탱크</title><link rel="stylesheet" href="styles.css"></head>
-<body><main>
-<h1>AI 선정 거시 이슈</h1><div id="list"></div>
-</main>
+<title>대시보드 · 싱크탱크</title><link rel="stylesheet" href="styles.css"></head>
+<body><main id="root"></main>
 <script src="data.js"></script>
 <script type="module">
-import { DB, el, mountNav, scenariosOfIssue } from './app.js';
+import { DB, NOW, qs, byId, scenariosOfIssue, dnum, starCount, lastVisit, markVisit, setVisit, el, mountNav, activate } from './app.js';
 mountNav('dashboard');
-const list = document.getElementById('list');
-for (const i of DB.issues) {
-  const n = scenariosOfIssue(i.id).length;
-  list.append(el('a', { href:`issue.html?id=${i.id}`, class:'card', style:'display:block;color:inherit' }, [
-    el('div', {}, [ el('span',{class:`badge heat-${i.heat}`},i.heat), ...i.sources.map(s=>el('span',{class:'badge'},s)) ]),
-    el('h3', { style:'margin:8px 0 4px' }, i.title),
-    el('p', { class:'crumb', style:'margin:0 0 8px' }, i.summary),
-    el('div', { class:'crumb' }, `트래픽 ${i.traffic.toLocaleString()} · 시나리오 ${n}개`)
-  ]));
+const root = document.getElementById('root');
+const SVGNS = 'http://www.w3.org/2000/svg';
+const W = 860, LANE_H = 56;
+
+root.append(el('h1', {}, '채택된 결정 흐름'));
+root.append(el('p', { class:'crumb' }, '지난 접속 이후 채택(현실화)된 결정이 트리로 뻗어나갑니다. 오른쪽 이슈를 선택하면 시나리오 분기를 볼 수 있습니다.'));
+
+// ---- 개요: 스파인(현실화 시나리오) + 이슈 팁 ----
+const realized = DB.scenarios.filter(s => s.realizedAt)
+  .sort((a,b) => dnum(a.realizedAt)-dnum(b.realizedAt) || dnum(a.createdAt)-dnum(b.createdAt) || (a.id < b.id ? -1 : 1));
+const maxD = dnum(NOW);
+const minR = realized.length ? Math.min(...realized.map(s=>dnum(s.realizedAt))) : maxD;
+const REPLAY_START = realized.length ? new Date(minR).toISOString().slice(0,10) : '2026-01-01';
+const spineY = 90, xLeft = 60, xNow = W - 220, tipX = W - 90, tipGap = 46;
+const issues = DB.issues;
+const xOfR = s => xLeft + (maxD===minR ? 0 : (dnum(s.realizedAt)-minR)/(maxD-minR)) * (xNow-xLeft);
+const tipY = idx => spineY + (idx - (issues.length-1)/2) * tipGap;
+const OV_H = Math.max(200, spineY + (issues.length/2)*tipGap + 40);
+
+const slider = el('input',{type:'range', min:String(minR), max:String(maxD), value:String(maxD), step:String(24*3600*1000), style:'flex:1', 'aria-label':'채택 시점 커서'});
+slider.id = 'timeline-cursor';
+const cursorLabel = el('span',{class:'crumb','aria-live':'polite'});
+const replay = el('button',{class:'btn ghost'},'▶ 다시 재생');
+root.append(el('div',{style:'display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0 4px'},
+  [el('label',{for:'timeline-cursor'},'시점'), slider, replay, cursorLabel]));
+
+const ovWrap = el('div',{class:'treewrap'});
+const ovSvg = document.createElementNS(SVGNS,'svg');
+ovSvg.setAttribute('viewBox',`0 0 ${W} ${OV_H}`); ovSvg.setAttribute('width','100%');
+ovWrap.append(ovSvg); root.append(ovWrap);
+
+const sub = el('div',{id:'sub',style:'margin-top:16px'});
+root.append(sub);
+
+let selectedIssue = null;
+
+function renderOverview(cur) {
+  cursorLabel.textContent = new Date(cur).toISOString().slice(0,10);
+  ovSvg.textContent = '';
+  const lit = realized.filter(s => dnum(s.realizedAt) <= cur);
+  for (let i=1;i<lit.length;i++){
+    const a=lit[i-1], b=lit[i], line=document.createElementNS(SVGNS,'line');
+    line.setAttribute('x1',xOfR(a));line.setAttribute('y1',spineY);line.setAttribute('x2',xOfR(b));line.setAttribute('y2',spineY);
+    line.setAttribute('class','tedge');line.setAttribute('stroke','var(--realized)');line.setAttribute('stroke-width','3');
+    ovSvg.append(line);
+  }
+  if (lit.length) {  // 마지막 채택 지점 → now(이슈 팬아웃 지점)까지 줄기 연장 — 스파인·이슈 팁 연결
+    const last = lit[lit.length-1], line = document.createElementNS(SVGNS,'line');
+    line.setAttribute('x1',xOfR(last));line.setAttribute('y1',spineY);line.setAttribute('x2',xNow);line.setAttribute('y2',spineY);
+    line.setAttribute('class','tedge');line.setAttribute('stroke','var(--realized)');line.setAttribute('stroke-width','3');
+    ovSvg.append(line);
+  }
+  for (const s of realized) {
+    const on = dnum(s.realizedAt) <= cur;
+    const g=document.createElementNS(SVGNS,'g'); g.setAttribute('class','tnode'+(on?'':' dim'));
+    const c=document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',xOfR(s));c.setAttribute('cy',spineY);c.setAttribute('r','7');
+    c.setAttribute('fill',on?'var(--realized)':'none');c.setAttribute('stroke','var(--accent)');c.setAttribute('stroke-width','2');
+    const t=document.createElementNS(SVGNS,'text');
+    t.setAttribute('x',xOfR(s));t.setAttribute('y',spineY-12);t.setAttribute('text-anchor','middle');
+    t.textContent = s.title;
+    g.append(c,t); ovSvg.append(g);
+  }
+  issues.forEach((iss,idx)=>{
+    const ty=tipY(idx), sel=selectedIssue===iss.id;
+    const line=document.createElementNS(SVGNS,'line');
+    line.setAttribute('x1',xNow);line.setAttribute('y1',spineY);line.setAttribute('x2',tipX);line.setAttribute('y2',ty);
+    line.setAttribute('class','tedge');line.setAttribute('stroke','var(--dim)');line.setAttribute('stroke-width','1.5');
+    ovSvg.append(line);
+    const g=document.createElementNS(SVGNS,'g');
+    g.setAttribute('class','tnode tip'+(sel?' sel':''));
+    g.setAttribute('tabindex','0');g.setAttribute('role','button');g.setAttribute('aria-expanded',String(sel));
+    g.setAttribute('aria-label',`${iss.title} 시나리오 열기`);
+    const c=document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',tipX);c.setAttribute('cy',ty);c.setAttribute('r','9');
+    c.setAttribute('fill',sel?'var(--accent)':'none');c.setAttribute('stroke','var(--accent)');c.setAttribute('stroke-width','2');
+    const t=document.createElementNS(SVGNS,'text');
+    t.setAttribute('x',tipX-14);t.setAttribute('y',ty+4);t.setAttribute('text-anchor','end');
+    t.textContent = iss.title;
+    g.append(c,t); activate(g, ()=>selectIssue(iss.id)); ovSvg.append(g);
+  });
 }
+
+function selectIssue(id){
+  selectedIssue = id;
+  renderOverview(Number(slider.value));
+  ovSvg.querySelector('.tnode.tip.sel')?.focus();  // 재렌더로 사라진 포커스를 선택된 팁에 복원
+  renderSub(id);
+}
+
+function renderSub(id){
+  sub.textContent='';
+  const issue = byId(DB.issues, id);
+  sub.append(el('div',{class:'crumb'}, `선택된 이슈: ${issue.title}`));
+  sub.append(el('a',{href:`submit.html?issue=${issue.id}`,class:'btn'},'+ 시나리오 제출'));
+  const scen = scenariosOfIssue(id);
+  if (!scen.length) { sub.append(el('p',{class:'empty',style:'margin-top:16px'},'아직 분기 없음 — 첫 시나리오를 제출해 보세요.')); return; }
+  if (!scen.some(s=>s.realizedAt)) sub.append(el('p',{class:'crumb'},'아직 현실화된 분기 없음 — 전부 후보로 표시됩니다.'));
+
+  const lanes = scen.map(s=>s.treeLane);
+  const laneMin = Math.min(...lanes), laneMax = Math.max(...lanes);
+  const H = (laneMax - laneMin + 2) * LANE_H;
+  const minD = Math.min(...scen.map(s=>dnum(s.createdAt))), cur = maxD;
+  const xOf = s => 60 + (cur===minD ? 0 : (dnum(s.createdAt)-minD)/(cur-minD)) * (W-120);
+  const yOf = s => (s.treeLane - laneMin + 1) * LANE_H;
+  const isReal = s => s.realizedAt && dnum(s.realizedAt) <= cur;
+
+  const vis = scen.filter(s => dnum(s.createdAt) <= cur);
+  const find = id2 => vis.find(s=>s.id===id2);
+  const depthCache = {};
+  function depth(s){ if (s.id in depthCache) return depthCache[s.id]; let d; if (isReal(s)) d=0; else { const p = s.parentScenarioId && find(s.parentScenarioId); d = p ? 1+depth(p) : 1; } return depthCache[s.id]=d; }
+  let kept = vis.filter(s => depth(s) <= 2);
+  const keep = new Set(kept.filter(s=>isReal(s)).map(s=>s.id));
+  const groups = {};
+  kept.filter(s=>!isReal(s)).forEach(s=>{ const k=s.parentScenarioId||'root'; (groups[k]=groups[k]||[]).push(s); });
+  for (const k in groups) groups[k].sort((a,b)=>starCount(b)-starCount(a)).slice(0,2).forEach(s=>keep.add(s.id));
+  kept = kept.filter(s=>keep.has(s.id));
+  const ids = new Set(kept.map(s=>s.id));
+  const shown = kept.filter(s => !s.parentScenarioId || ids.has(s.parentScenarioId) || !find(s.parentScenarioId));
+
+  const wrap = el('div',{class:'treewrap',style:'margin-top:12px'});
+  const svg = document.createElementNS(SVGNS,'svg');
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%');
+  const sid = new Set(shown.map(s=>s.id));
+  for (const s of shown) {
+    if (s.parentScenarioId && sid.has(s.parentScenarioId)) {
+      const p = byId(DB.scenarios, s.parentScenarioId), line = document.createElementNS(SVGNS,'line');
+      line.setAttribute('x1',xOf(p));line.setAttribute('y1',yOf(p));line.setAttribute('x2',xOf(s));line.setAttribute('y2',yOf(s));
+      const trunk = isReal(s) && isReal(p);
+      line.setAttribute('class','tedge');line.setAttribute('stroke',trunk?'var(--realized)':'var(--dim)');line.setAttribute('stroke-width',trunk?'3':'1.5');
+      svg.append(line);
+    }
+  }
+  for (const s of shown) {
+    const g=document.createElementNS(SVGNS,'g'); g.setAttribute('class','tnode'+(isReal(s)?'':' dim'));
+    g.setAttribute('tabindex','0');g.setAttribute('role','link');
+    g.setAttribute('aria-label',`${s.title}, 지지 ${starCount(s)}${isReal(s)?', 현실화됨':''} — 시나리오 열기`);
+    const c=document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',xOf(s));c.setAttribute('cy',yOf(s));c.setAttribute('r','8');
+    c.setAttribute('fill',isReal(s)?'var(--realized)':'none');c.setAttribute('stroke','var(--accent)');c.setAttribute('stroke-width','2');
+    const t=document.createElementNS(SVGNS,'text');
+    t.setAttribute('x',xOf(s));t.setAttribute('y',yOf(s)-14);t.setAttribute('text-anchor','middle');
+    t.textContent = `${s.title} ★${starCount(s)}`;
+    g.append(c,t); activate(g, ()=>{ location.href = `scenario.html?id=${s.id}`; }); svg.append(g);
+  }
+  wrap.append(svg); sub.append(wrap);
+
+  const list = el('div',{style:'margin-top:12px'});
+  list.append(el('h3',{},'시나리오 목록'));
+  scen.forEach(s => list.append(el('div',{class:'card'},
+    el('a',{href:`scenario.html?id=${s.id}`}, `${s.title} ★${starCount(s)}${s.realizedAt?' · 현실화':''}`))));
+  sub.append(list);
+}
+
+slider.addEventListener('input', () => { stopAnim(); renderOverview(Number(slider.value)); });
+let timer = null;
+const stopAnim = () => { if (timer) { clearInterval(timer); timer=null; } };
+function animate(){
+  stopAnim();
+  const lv = lastVisit(); const p = (lv && !isNaN(dnum(lv))) ? dnum(lv) : NaN;
+  if (isNaN(p) || p >= maxD) { renderOverview(maxD); slider.value = String(maxD); markVisit(); return; }
+  const steps = 12, dt = (maxD - p)/steps; let i = 0;
+  renderOverview(p); slider.value = String(Math.round(p));
+  timer = setInterval(() => { i++; const c = i>=steps ? maxD : p+dt*i; slider.value = String(Math.round(c)); renderOverview(c); if (i>=steps){ stopAnim(); markVisit(); } }, 130);
+}
+replay.addEventListener('click', () => { setVisit(REPLAY_START); animate(); });
+animate();
+
+const qi = qs('issue');
+if (qi && byId(DB.issues, qi)) selectIssue(qi);
 </script></body></html>

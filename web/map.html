@@ -1,44 +1,77 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>디지털 트윈 지도 · 싱크탱크</title><link rel="stylesheet" href="styles.css">
-<style>.mapwrap{position:relative} .hot{cursor:pointer} .hot circle{fill:var(--accent);opacity:.85} .hot:hover circle{fill:#fff}</style></head>
+<style>.mapwrap{position:relative} .pin{cursor:pointer} .pin circle{fill:var(--accent);opacity:.55} .pin.sel circle{fill:#fff;opacity:1} .pin:hover circle{fill:#fff}</style></head>
 <body><main>
 <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
   <h1 style="margin-right:auto">디지털 트윈 지도</h1>
   <span class="badge heat-low" id="sync"></span>
 </div>
-<p class="crumb">지도 반영된(reflected) 시나리오를 확인 → AI 분석 실행</p>
+<p class="crumb">현 시점 이슈 핀을 선택해 시나리오를 고르면 근거·영향·결과를 보여줍니다.</p>
 <div class="mapwrap treewrap"><svg viewBox="0 0 600 320" width="100%" id="map">
   <rect x="0" y="0" width="600" height="320" fill="#0b1526"/>
   <path d="M40,120 Q120,60 220,100 T420,90 T560,140 L560,240 Q400,220 260,250 T40,230 Z" fill="#16243a" stroke="#233047"/>
 </svg></div>
-<div id="panel" style="margin-top:16px" aria-live="polite"></div>
+<div id="panel" style="margin-top:16px" aria-live="polite"><p class="crumb">이슈 핀을 선택하세요.</p></div>
 </main>
 <script src="data.js"></script>
 <script type="module">
-import { DB, NOW, el, mountNav, isReflected, applyEdit, activate } from './app.js';
+import { DB, NOW, byId, scenariosOfIssue, el, mountNav, activate, applyEdit, getMapChoice, setMapChoice } from './app.js';
 mountNav('map');
 document.getElementById('sync').textContent = `현실 동기화: ${NOW} (목)`;
 const svg = document.getElementById('map'), panel = document.getElementById('panel');
-const SVGNS='http://www.w3.org/2000/svg';
-const spots = DB.scenarios.filter(s => isReflected(s) && s.mapLocation).map(applyEdit);
-if (!spots.length) panel.append(el('p',{class:'empty'},'아직 지도에 반영된 시나리오 없음. 토론 화면에서 "지도에 반영"을 켜세요.'));
-function select(s){
-  panel.innerHTML='';
-  panel.append(el('div',{class:'card'}, [
-    el('h3',{}, s.title), el('div',{class:'crumb'}, s.mapLocation.label),
-    el('div',{class:'card'}, [ el('strong',{},'토론 요약'), el('p',{style:'margin:6px 0 0'}, s.discussionSummary) ]),
-    el('div',{class:'card'}, [ el('strong',{},'근거'), el('p',{style:'margin:6px 0 0'}, s.rationale) ]),
-    el('a',{href:`analysis.html?id=${s.id}`,class:'btn'},'AI 분석 실행 →')
-  ]));
+const SVGNS = 'http://www.w3.org/2000/svg';
+let selected = null;
+
+function renderPins(){
+  svg.querySelectorAll('.pin').forEach(n => n.remove());
+  DB.issues.forEach(iss => {
+    const { x, y } = iss.mapLocation;
+    const on = !!getMapChoice(iss.id);  // 강조 = 실제 선택된 시나리오가 있는 이슈만(단순히 열어본 핀은 제외)
+    const g = document.createElementNS(SVGNS,'g'); g.setAttribute('class','pin'+(on?' sel':''));
+    g.setAttribute('data-issue', iss.id);
+    g.setAttribute('tabindex','0'); g.setAttribute('role','button'); g.setAttribute('aria-label',`${iss.title} 상세 보기`);
+    const c = document.createElementNS(SVGNS,'circle'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r','8');
+    const t = document.createElementNS(SVGNS,'text'); t.setAttribute('x',x+12); t.setAttribute('y',y+4); t.setAttribute('fill','#e6ecf5'); t.setAttribute('font-size','12'); t.textContent = iss.title;
+    g.append(c,t); activate(g, ()=>select(iss.id)); svg.append(g);
+  });
 }
-spots.forEach(s => {
-  const g = document.createElementNS(SVGNS,'g'); g.setAttribute('class','hot');
-  g.setAttribute('tabindex','0'); g.setAttribute('role','button');
-  g.setAttribute('aria-label', `${s.title} (${s.mapLocation.label}) — 상세 보기`);
-  const c = document.createElementNS(SVGNS,'circle'); c.setAttribute('cx',s.mapLocation.x); c.setAttribute('cy',s.mapLocation.y); c.setAttribute('r','8');
-  const t = document.createElementNS(SVGNS,'text'); t.setAttribute('x',s.mapLocation.x+12); t.setAttribute('y',s.mapLocation.y+4);
-  t.setAttribute('fill','#e6ecf5'); t.setAttribute('font-size','12'); t.textContent=s.title;
-  g.append(c,t); activate(g, ()=>select(s)); svg.append(g);
-});
+
+function select(id){
+  selected = id; renderPins();
+  svg.querySelector(`.pin[data-issue="${id}"]`)?.focus();  // 재렌더로 사라진 포커스를 클릭한 핀에 복원
+  const iss = byId(DB.issues, id);
+  panel.textContent='';
+  const card = el('div',{class:'card'}, [ el('h3',{}, iss.title), el('div',{class:'crumb'}, iss.mapLocation.label) ]);
+  const scen = scenariosOfIssue(id);
+  if (!scen.length) { card.append(el('p',{class:'empty'},'제출된 시나리오 없음')); panel.append(card); return; }
+  const fs = el('fieldset',{style:'border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px'});
+  fs.append(el('legend',{},'시나리오 선택'));
+  const detail = el('div',{});
+  const chosen = getMapChoice(id);
+  scen.forEach(s => {
+    const rid = `sc-${s.id}`;
+    const radio = el('input',{type:'radio', id:rid, name:`scenario-${id}`, value:s.id, style:'margin-right:6px'});
+    if (chosen === s.id) radio.checked = true;
+    radio.addEventListener('change', () => { setMapChoice(id, s.id); renderDetail(s.id); renderPins(); });
+    const label = el('label',{for:rid, style:'display:block;margin:4px 0;cursor:pointer'});
+    label.append(radio, `${applyEdit(s).title}${s.realizedAt?' · 현실화':''}`);
+    fs.append(label);
+  });
+  card.append(fs, detail);
+  panel.append(card);
+  function renderDetail(sid){
+    detail.textContent='';
+    const v = applyEdit(byId(DB.scenarios, sid));
+    detail.append(
+      el('div',{class:'card'}, [ el('strong',{},'근거'), el('p',{style:'margin:6px 0 0'}, v.rationale) ]),
+      el('div',{class:'card'}, [ el('strong',{},'영향'), el('p',{style:'margin:6px 0 0'}, v.impact) ]),
+      el('div',{class:'card'}, [ el('strong',{},'결과'), el('p',{style:'margin:6px 0 0'}, v.outcome) ]),
+      el('a',{href:`analysis.html?id=${sid}`, class:'btn'}, 'AI 분석 실행 →')
+    );
+  }
+  if (chosen) renderDetail(chosen);
+}
+
+renderPins();
 </script></body></html>

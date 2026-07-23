@@ -8,17 +8,17 @@ export const dnum = (d) => Date.parse(d);
 
 // localStorage 키 네임스페이스(다른 앱과 충돌 방지) + 손상된 값 방어.
 const NS = 'tt:';
-const _get = (k) => { try { return JSON.parse(localStorage.getItem(NS + k) || '{}'); } catch { return {}; } };
+const _get = (k) => { try { const v = JSON.parse(localStorage.getItem(NS + k) || '{}'); return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; } catch { return {}; } };
 const _set = (k, o) => localStorage.setItem(NS + k, JSON.stringify(o));
 
-// star: 유저 지지(오버라이드는 +1 토글). realizedAt/reflected와 독립.
+// star: 유저 지지(오버라이드는 +1 토글). realizedAt·mapChoice와 독립.
 export function toggleStar(id) { const o = _get('stars'); o[id] = !o[id]; _set('stars', o); }
 export function isStarred(s) { return !!_get('stars')[s.id]; }
 export function starCount(s) { return s.stars + (_get('stars')[s.id] ? 1 : 0); }
 
-// reflected: 지도 표시. 토론 화면 토글.
-export function setReflected(id, v) { const o = _get('reflected'); o[id] = v; _set('reflected', o); }
-export function isReflected(s) { const o = _get('reflected'); return s.id in o ? o[s.id] : s.reflected; }
+// mapChoice: 지도에서 이슈별 선택한 시나리오. 저장값이 그 이슈 시나리오에 없으면 무시.
+export function getMapChoice(issueId) { const id = _get('mapChoice')[issueId]; return (id && scenariosOfIssue(issueId).some(s => s.id === id)) ? id : null; }
+export function setMapChoice(issueId, scenarioId) { const o = _get('mapChoice'); o[issueId] = scenarioId; _set('mapChoice', o); }
 
 // edit: 제목/본문 목 편집 → 지도·분석에 반영.
 export function setEdit(id, patch) { const o = _get('edits'); o[id] = { ...(o[id] || {}), ...patch }; _set('edits', o); }
