@@ -29,6 +29,15 @@ export function markVisit() { localStorage.setItem('lastVisit', NOW); }
 // moderation: 금지어 마스킹(클라이언트 목).
 export function moderate(text) { let t = text; for (const w of DB.badwords) t = t.split(w).join('*'.repeat(w.length)); return t; }
 
+// SVG/커스텀 요소를 클릭·키보드(Enter·Space) 양쪽으로 활성화 (접근성).
+// 호출부에서 role·tabindex·aria-label을 함께 지정할 것.
+export function activate(node, fn) {
+  node.addEventListener('click', fn);
+  node.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); }
+  });
+}
+
 export function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {

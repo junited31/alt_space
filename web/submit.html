@@ -12,15 +12,15 @@ if (!issue) { root.append(el('p',{class:'empty'},'이슈 없음')); }
 else {
   root.append(el('div',{class:'crumb'},`대시보드 › ${issue.title} › 시나리오 제출`));
   root.append(el('h1',{},'시나리오 제출'));
-  const parentSel = el('select',{}, [ el('option',{value:''},'(최상위 — 부모 없음)'),
+  const parentSel = el('select',{id:'f-parent'}, [ el('option',{value:''},'(최상위 — 부모 없음)'),
     ...scenariosOfIssue(issue.id).map(s => el('option',{value:s.id}, s.title)) ]);
-  const title = el('input',{placeholder:'시나리오 제목',style:'width:100%;margin:6px 0'});
-  const bodyT = el('textarea',{placeholder:'시나리오 설명',rows:'4',style:'width:100%;margin:6px 0'});
-  const rat = el('textarea',{placeholder:'분기 근거',rows:'3',style:'width:100%;margin:6px 0'});
-  const form = el('div',{class:'card'}, [
-    el('label',{},'부모 시나리오(선택)'), parentSel,
-    el('label',{},'제목'), title, el('label',{},'설명'), bodyT, el('label',{},'근거'), rat,
-    el('button',{class:'btn', onclick:() => {
+  const title = el('input',{id:'f-title', placeholder:'시나리오 제목',style:'width:100%;margin:6px 0'});
+  const bodyT = el('textarea',{id:'f-body', placeholder:'시나리오 설명',rows:'4',style:'width:100%;margin:6px 0'});
+  const rat = el('textarea',{id:'f-rationale', placeholder:'분기 근거',rows:'3',style:'width:100%;margin:6px 0'});
+  const form = el('form',{class:'card'}, [
+    el('label',{for:'f-parent'},'부모 시나리오(선택)'), parentSel,
+    el('label',{for:'f-title'},'제목'), title, el('label',{for:'f-body'},'설명'), bodyT, el('label',{for:'f-rationale'},'근거'), rat,
+    el('button',{class:'btn', type:'button', onclick:() => {
       if (!title.value.trim()) { alert('제목을 입력하세요'); return; }
       alert('(목) 제출됨 — 영속 저장이 없어 트리에 실제 추가되진 않습니다. 이슈로 돌아갑니다.');
       location.href = `issue.html?id=${issue.id}`;

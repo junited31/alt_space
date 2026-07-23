@@ -1,4 +1,4 @@
-:root { --bg:#0f1420; --panel:#1a2230; --line:#2b3547; --fg:#e6ecf5; --muted:#8a97ab; --accent:#4f9dff; --realized:#6ee7a8; --dim:#3a4658; --heat-high:#ff5c5c; --heat-medium:#ffb84f; --heat-low:#6ee7a8; }
+:root { --bg:#0f1420; --panel:#1a2230; --line:#2b3547; --fg:#e6ecf5; --muted:#8a97ab; --accent:#4f9dff; --btn:#2f6fd0; --realized:#6ee7a8; --dim:#3a4658; --heat-high:#ff5c5c; --heat-medium:#ffb84f; --heat-low:#6ee7a8; }
 * { box-sizing: border-box; }
 body { margin:0; font:15px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
 a { color:var(--accent); text-decoration:none; }
@@ -10,12 +10,16 @@ main { max-width:1000px; margin:0 auto; padding:24px 20px; }
 .badge { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted); margin-right:6px; }
 .heat-high{color:var(--heat-high);border-color:var(--heat-high);} .heat-medium{color:var(--heat-medium);border-color:var(--heat-medium);} .heat-low{color:var(--heat-low);border-color:var(--heat-low);}
 .empty { color:var(--muted); font-style:italic; padding:24px; text-align:center; border:1px dashed var(--line); border-radius:10px; }
-.btn { display:inline-block; background:var(--accent); color:#fff; padding:8px 14px; border-radius:8px; border:none; cursor:pointer; font-size:14px; }
+.btn { display:inline-block; background:var(--btn); color:#fff; padding:8px 14px; border-radius:8px; border:none; cursor:pointer; font-size:14px; }
 .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
 .btn.on { background:var(--realized); color:#0b1526; border-color:var(--realized); }
 .lens-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .crumb { color:var(--muted); font-size:13px; margin-bottom:8px; }
-.star { cursor:pointer; user-select:none; }
+.star { cursor:pointer; user-select:none; background:none; border:none; color:inherit; font:inherit; padding:0; }
+/* 키보드 포커스 표시 (접근성) */
+.btn:focus-visible, .star:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
+.tnode:focus-visible circle, .hot:focus-visible circle { stroke:var(--fg); stroke-width:3; }
+.tnode:focus-visible, .hot:focus-visible { outline:none; }
 /* 트리 */
 .treewrap { background:#0b1526; border:1px solid var(--line); border-radius:10px; }
 .tnode circle { transition: opacity .4s, fill .4s; cursor:pointer; }

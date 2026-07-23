@@ -4,7 +4,7 @@
 <body><main id="root"></main>
 <script src="data.js"></script>
 <script type="module">
-import { DB, NOW, qs, byId, scenariosOfIssue, dnum, starCount, lastVisit, markVisit, el, mountNav } from './app.js';
+import { DB, NOW, qs, byId, scenariosOfIssue, dnum, starCount, lastVisit, markVisit, el, mountNav, activate } from './app.js';
 mountNav('dashboard');
 const root = document.getElementById('root');
 const issue = byId(DB.issues, qs('id'));
@@ -31,10 +31,11 @@ else {
     if (!realizedAll) root.append(el('p',{class:'crumb'},'아직 현실화된 분기 없음 — 전부 후보로 표시됩니다.'));
 
     // 슬라이더 + 재생 버튼
-    const slider = el('input',{type:'range', min:String(minD), max:String(maxD), value:String(maxD), step:String(24*3600*1000), style:'flex:1'});
-    const cursorLabel = el('span',{class:'crumb'});
+    const slider = el('input',{type:'range', min:String(minD), max:String(maxD), value:String(maxD), step:String(24*3600*1000), style:'flex:1', 'aria-label':'타임라인 시점 커서'});
+    const cursorLabel = el('span',{class:'crumb', 'aria-live':'polite'});
     const replay = el('button',{class:'btn ghost'},'▶ 다시 재생');
-    root.append(el('div',{style:'display:flex;align-items:center;gap:12px;margin:16px 0 4px'}, ['시점', slider, replay, cursorLabel]));
+    root.append(el('div',{style:'display:flex;align-items:center;gap:12px;margin:16px 0 4px'}, [el('label',{for:'timeline-cursor'},'시점'), slider, replay, cursorLabel]));
+    slider.id = 'timeline-cursor';
 
     const wrap = el('div',{class:'treewrap'});
     const svg = document.createElementNS(SVGNS,'svg');
@@ -89,6 +90,8 @@ else {
       for (const s of shown) {
         const g = document.createElementNS(SVGNS,'g');
         g.setAttribute('class', 'tnode' + (isRealized(s,cur) ? '' : ' dim'));
+        g.setAttribute('tabindex','0'); g.setAttribute('role','link');
+        g.setAttribute('aria-label', `${s.title}, 지지 ${starCount(s)}${isRealized(s,cur) ? ', 현실화됨' : ''} — 시나리오 열기`);
         const c = document.createElementNS(SVGNS,'circle');
         c.setAttribute('cx',xOf(s)); c.setAttribute('cy',yOf(s)); c.setAttribute('r','8');
         c.setAttribute('fill', isRealized(s,cur) ? 'var(--realized)' : 'none');
@@ -97,7 +100,7 @@ else {
         t.setAttribute('x',xOf(s)); t.setAttribute('y',yOf(s)-14); t.setAttribute('text-anchor','middle');
         t.textContent = `${s.title} ★${starCount(s)}`;
         g.append(c,t);
-        g.addEventListener('click',()=>{ location.href = `scenario.html?id=${s.id}`; });
+        activate(g, ()=>{ location.href = `scenario.html?id=${s.id}`; });
         svg.append(g);
       }
     }

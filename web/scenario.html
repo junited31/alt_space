@@ -18,8 +18,8 @@ else {
 
   const h = el('h1',{}, s.title); root.append(h);
   // star (지지) — realizedAt/reflected와 독립
-  const starEl = el('span',{class:'star'}, `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`);
-  starEl.addEventListener('click',()=>{ toggleStar(raw.id); starEl.textContent = `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`; });
+  const starEl = el('button',{class:'star', type:'button', 'aria-pressed':String(isStarred(raw)), 'aria-label':'이 시나리오 지지'}, `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`);
+  starEl.addEventListener('click',()=>{ toggleStar(raw.id); starEl.setAttribute('aria-pressed', String(isStarred(raw))); starEl.textContent = `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`; });
   root.append(el('div',{style:'margin:4px 0 12px'}, [starEl, s.realizedAt ? el('span',{class:'badge heat-low',style:'margin-left:10px'}, `현실화 ${s.realizedAt}`) : el('span',{class:'badge',style:'margin-left:10px'},'미현실')]));
 
   const body = el('p',{}, s.body); root.append(body);
@@ -34,12 +34,21 @@ else {
   root.append(el('div',{style:'margin:12px 0'}, refBtn));
 
   // 인라인 편집 (목 → localStorage → 지도·분석 반영)
-  const editWrap = el('div',{class:'card',style:'display:none'});
-  const eTitle = el('input',{value:s.title,style:'width:100%;margin:6px 0'});
-  const eBody = el('textarea',{rows:'4',style:'width:100%;margin:6px 0'}); eBody.value = s.body;
-  editWrap.append(el('strong',{},'시나리오 편집(목)'), eTitle, eBody,
-    el('button',{class:'btn',onclick:()=>{ setEdit(raw.id,{title:eTitle.value,body:eBody.value}); h.textContent=eTitle.value; body.textContent=eBody.value; editWrap.style.display='none'; }},'저장'));
-  const editBtn = el('button',{class:'btn ghost',onclick:()=>{ editWrap.style.display = editWrap.style.display==='none'?'block':'none'; }},'✎ 편집');
+  const editWrap = el('form',{id:'edit-form', class:'card', style:'display:none'});
+  const eTitle = el('input',{id:'edit-title', value:s.title, style:'width:100%;margin:6px 0'});
+  const eBody = el('textarea',{id:'edit-body', rows:'4', style:'width:100%;margin:6px 0'}); eBody.value = s.body;
+  editWrap.append(
+    el('strong',{},'시나리오 편집(목)'),
+    el('label',{for:'edit-title', style:'display:block'},'제목'), eTitle,
+    el('label',{for:'edit-body', style:'display:block'},'설명'), eBody,
+    el('button',{class:'btn', type:'button', onclick:()=>{ setEdit(raw.id,{title:eTitle.value,body:eBody.value}); h.textContent=eTitle.value; body.textContent=eBody.value; toggleEdit(false); }},'저장'));
+  const editBtn = el('button',{class:'btn ghost', 'aria-expanded':'false', 'aria-controls':'edit-form', onclick:()=>toggleEdit()},'✎ 편집');
+  function toggleEdit(open) {
+    const show = open ?? editWrap.style.display==='none';
+    editWrap.style.display = show ? 'block' : 'none';
+    editBtn.setAttribute('aria-expanded', String(show));
+    if (show) eTitle.focus();
+  }
   root.append(editBtn, editWrap);
 
   // 코멘트 (모더레이션 마스킹)
