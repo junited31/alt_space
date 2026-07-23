@@ -1,6 +1,6 @@
 ---
 name: opus-reviewer
-description: Highest-capability code and design reviewer. Use for whole-branch final reviews, subtle correctness/architecture review, and any review needing maximum reasoning. Returns prioritized Critical / Important / Minor findings.
+description: Highest-capability code and design reviewer. Assigned role — PER-TASK review in the subagent-driven workflow (spec compliance + code quality after each task). Also for subtle correctness/architecture review needing maximum reasoning. Returns prioritized Critical / Important / Minor findings.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash

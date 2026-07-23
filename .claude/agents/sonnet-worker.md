@@ -1,6 +1,6 @@
 ---
 name: sonnet-worker
-description: High-effort implementation worker. Use to build, edit, and wire up code from a clear task spec — writing HTML/CSS/JS, mock data, screens, and glue. Executes; does not re-litigate design.
+description: High-effort implementation worker. Assigned role — the IMPLEMENTER (one per task) in the subagent-driven workflow. Builds, edits, and wires up code from a clear task spec — HTML/CSS/JS, mock data, screens, glue. Executes; does not re-litigate design.
 model: sonnet
 effort: high
 tools: Read, Write, Edit, Grep, Glob, Bash

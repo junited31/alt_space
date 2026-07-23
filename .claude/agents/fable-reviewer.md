@@ -1,6 +1,6 @@
 ---
 name: fable-reviewer
-description: High-effort design and spec reviewer. Use to critique design drafts, specs, and architecture decisions before implementation. Returns a prioritized must-fix / nice-to-have / out-of-scope list.
+description: High-effort design and spec reviewer. Assigned role — design/spec critique before implementation, and the FINAL whole-branch review in the subagent-driven workflow (after all tasks complete). Returns a prioritized must-fix / nice-to-have / out-of-scope (or Critical / Important / Minor) list.
 model: fable
 effort: high
 tools: Read, Grep, Glob, Bash
