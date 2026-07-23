@@ -1,0 +1,56 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>시나리오 토론 · 싱크탱크</title><link rel="stylesheet" href="styles.css"></head>
+<body><main id="root"></main>
+<script src="data.js"></script>
+<script type="module">
+import { DB, qs, byId, childrenOf, el, mountNav, toggleStar, isStarred, starCount, isReflected, setReflected, setEdit, applyEdit, moderate } from './app.js';
+mountNav('dashboard');
+const root = document.getElementById('root');
+const raw = byId(DB.scenarios, qs('id'));
+if (!raw) { root.append(el('p',{class:'empty'},'시나리오 없음')); }
+else {
+  const s = applyEdit(raw);   // 편집 반영본
+  const issue = byId(DB.issues, s.issueId);
+  const parent = s.parentScenarioId ? byId(DB.scenarios, s.parentScenarioId) : null;
+  root.append(el('div',{class:'crumb'}, `대시보드 › ${issue.title}`));
+  if (parent) root.append(el('div',{class:'crumb'}, ['분기 출처: ', el('a',{href:`scenario.html?id=${parent.id}`}, parent.title)]));
+
+  const h = el('h1',{}, s.title); root.append(h);
+  // star (지지) — realizedAt/reflected와 독립
+  const starEl = el('span',{class:'star'}, `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`);
+  starEl.addEventListener('click',()=>{ toggleStar(raw.id); starEl.textContent = `${isStarred(raw)?'★':'☆'} ${starCount(raw)}`; });
+  root.append(el('div',{style:'margin:4px 0 12px'}, [starEl, s.realizedAt ? el('span',{class:'badge heat-low',style:'margin-left:10px'}, `현실화 ${s.realizedAt}`) : el('span',{class:'badge',style:'margin-left:10px'},'미현실')]));
+
+  const body = el('p',{}, s.body); root.append(body);
+  root.append(el('div',{class:'card'}, [ el('strong',{},'토론 요약'), el('p',{style:'margin:6px 0 0'}, s.discussionSummary) ]));
+  root.append(el('div',{class:'card'}, [ el('strong',{},'근거'), el('p',{style:'margin:6px 0 0'}, s.rationale) ]));
+
+  // 지도 반영 토글 (reflected)
+  let refd = isReflected(raw);
+  const refBtn = el('button',{class:'btn ' + (refd?'on':'ghost')}, refd?'지도 반영됨 ✓':'지도에 반영');
+  if (!raw.mapLocation) { refBtn.disabled = true; refBtn.textContent = '지도 좌표 없음 — 반영 불가(목)'; refBtn.className = 'btn ghost'; }
+  else refBtn.addEventListener('click',()=>{ refd=!refd; setReflected(raw.id,refd); refBtn.textContent = refd?'지도 반영됨 ✓':'지도에 반영'; refBtn.className='btn '+(refd?'on':'ghost'); });
+  root.append(el('div',{style:'margin:12px 0'}, refBtn));
+
+  // 인라인 편집 (목 → localStorage → 지도·분석 반영)
+  const editWrap = el('div',{class:'card',style:'display:none'});
+  const eTitle = el('input',{value:s.title,style:'width:100%;margin:6px 0'});
+  const eBody = el('textarea',{rows:'4',style:'width:100%;margin:6px 0'}); eBody.value = s.body;
+  editWrap.append(el('strong',{},'시나리오 편집(목)'), eTitle, eBody,
+    el('button',{class:'btn',onclick:()=>{ setEdit(raw.id,{title:eTitle.value,body:eBody.value}); h.textContent=eTitle.value; body.textContent=eBody.value; editWrap.style.display='none'; }},'저장'));
+  const editBtn = el('button',{class:'btn ghost',onclick:()=>{ editWrap.style.display = editWrap.style.display==='none'?'block':'none'; }},'✎ 편집');
+  root.append(editBtn, editWrap);
+
+  // 코멘트 (모더레이션 마스킹)
+  root.append(el('h2',{},'토론'));
+  const cs = DB.comments.filter(c => c.scenarioId === raw.id);
+  if (!cs.length) root.append(el('p',{class:'empty'},'아직 코멘트 없음'));
+  cs.forEach(c => root.append(el('div',{class:'card'}, [ el('strong',{},c.author), el('span',{class:'crumb'},` · ${c.ts}`), el('p',{style:'margin:6px 0 0'}, moderate(c.body)) ])));
+
+  // 하위 분기
+  const kids = childrenOf(raw.id);
+  if (kids.length) { root.append(el('h2',{},'여기서 분기된 시나리오'));
+    kids.forEach(k => root.append(el('div',{class:'card'}, el('a',{href:`scenario.html?id=${k.id}`}, k.title)))); }
+}
+</script></body></html>
