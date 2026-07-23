@@ -27,3 +27,7 @@ main { max-width:1000px; margin:0 auto; padding:24px 20px; }
 .tnode text { fill:var(--fg); font-size:11px; }
 .tnode.dim { opacity:.4; } .tnode.dim text { fill:var(--muted); }
 .tedge { transition: opacity .4s, stroke .4s; }
+/* 대시보드 이슈 팁 */
+.tnode.tip text { font-size:12px; }
+.tnode.tip.sel circle { fill:var(--accent); }
+.tnode.tip.sel text { fill:var(--fg); font-weight:700; }
